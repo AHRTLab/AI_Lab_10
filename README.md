@@ -1,2 +1,5 @@
 # AI_Lab_10
-Intro to AI Lab 10 code
+
+Open the Jupyter Notebook and follow the instructions there.
+
+Make sure you run the first cell to install the libraries needed.
