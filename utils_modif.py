@@ -46,14 +46,14 @@ def train_modif(env, current_model,target_model, optimizer, replay_buffer, devic
     losses = []
     current_model.train()
     for episode in range(EPISODES):
-        state = env.reset()
+        state, info = env.reset()
         episode_reward = 0.0
         while True:
             epsilon = EPS_END + (EPS_START - EPS_END) * np.exp(- steps_done / EPS_DECAY)
             action = current_model.act(state, epsilon, device)
             steps_done += 1
 
-            next_state, reward, done, _ = env.step(action)
+            next_state, reward, done, _, info = env.step(action)
             replay_buffer.push(state, action, reward, next_state, done)
 
             state = next_state
@@ -89,11 +89,11 @@ def test_modif(env, model, episodes, render=True, device=device, context=""):
     env = gym.wrappers.Monitor(env, VIDEO_SAVE_PATH + f'ddqn_{env.spec.id}_video_{context}')
     model.eval()
     for episode in range(episodes):
-        state = env.reset()
+        state, info = env.reset()
         episode_reward = 0.0
         while True:
             action = model.act(state, 0, device)
-            next_state, reward, done, _ = env.step(action)
+            next_state, reward, done, _, info = env.step(action)
 
             if render:
                 env.render()

@@ -5,10 +5,10 @@ import cv2
 
 cv2.ocl.setUseOpenCL(False) # disable GPU usage by OpenCV
 
-def make_atari_env(env_id, episodic_life=True, clip_rewards=True, stack_frames=True, scale=False):
+def make_atari_env(env_id, episodic_life=True, clip_rewards=True, stack_frames=True, scale=False, render_mode='human'):
     """Configure the atari environment."""
-    env = gym.make(env_id)
-    # assert 'NoFrameskip' in env.spec.id
+    env = gym.make(env_id, render_mode=render_mode, frameskip=1, obs_type='rgb', repeat_action_probability=0.0)
+    #assert 'NoFrameskip' in env.spec.id
     if episodic_life:
         env = EpisodicLifeEnv(env)
     env = NoopResetEnv(env, noop_max=30)
@@ -49,13 +49,11 @@ class NoopResetEnv(gym.Wrapper):
         assert noops > 0
         obs = None
         for _ in range(noops):
-            try:
-                obs, _, done, _ = self.env.step(self.noop_action)
-            except ValueError:
-                obs, _, done, _, _ = self.env.step(self.noop_action)
+
+            obs, _, done, _, info = self.env.step(self.noop_action)
             if done:
-                obs = self.env.reset(**kwargs)
-        return obs
+                obs, info = self.env.reset(**kwargs)
+        return obs, info
 
     def step(self, ac):
         return self.env.step(ac)
@@ -70,21 +68,16 @@ class FireResetEnv(gym.Wrapper):
 
     def reset(self, **kwargs):
         self.env.reset(**kwargs)
-        try:
-            obs, _, done, _ = self.env.step(1)
-        except ValueError:
-            obs, _, done, _, _ = self.env.step(1)
+
+        obs, _, done, _, _ = self.env.step(1)
 
         if done:
             self.env.reset(**kwargs)
 
-        try:
-            obs, _, done, _ = self.env.step(2)
-        except ValueError:
-            obs, _, done, _, _ = self.env.step(2)
+        obs, _, done, _, info = self.env.step(2)
         if done:
             self.env.reset(**kwargs)
-        return obs
+        return obs, info
 
     def step(self, ac):
         return self.env.step(ac)
@@ -100,10 +93,8 @@ class EpisodicLifeEnv(gym.Wrapper):
         self.was_real_done = True
 
     def step(self, action):
-        try:
-            obs, reward, done, info = self.env.step(action)
-        except:
-            obs, reward, done, _, info = self.env.step(action)
+
+        obs, reward, done, _, info = self.env.step(action)
         self.was_real_done = done
         # check current lives, make loss of life terminal,
         # then update lives to handle bonus lives
@@ -114,7 +105,7 @@ class EpisodicLifeEnv(gym.Wrapper):
             # the environment advertises done.
             done = True
         self.lives = lives
-        return obs, reward, done, info
+        return obs, reward, done, False, info
 
     def reset(self, **kwargs):
         """Reset only when lives are exhausted.
@@ -122,13 +113,12 @@ class EpisodicLifeEnv(gym.Wrapper):
         and the learner need not know about any of this behind-the-scenes.
         """
         if self.was_real_done:
-            obs = self.env.reset(**kwargs)
+            obs, info = self.env.reset(**kwargs)
         else:
             # no-op step to advance from terminal/lost life state
-            obs, _, _, _ = self.env.step(0)
+            obs, _, _, _, info = self.env.step(0)
         self.lives = self.env.unwrapped.ale.lives()
-        return obs
-
+        return obs, info
 
 class MaxAndSkipEnv(gym.Wrapper):
     def __init__(self, env, skip=4):
@@ -146,10 +136,8 @@ class MaxAndSkipEnv(gym.Wrapper):
         total_reward = 0.0
         done = None
         for i in range(self._skip):
-            try:
-                obs, reward, done, info = self.env.step(action)
-            except ValueError:
-                obs, reward, done, _,  info = self.env.step(action)
+
+            obs, reward, done, _,  info = self.env.step(action)
             if i == self._skip - 2: self._obs_buffer[0] = obs
             if i == self._skip - 1: self._obs_buffer[1] = obs
             total_reward += reward
@@ -158,7 +146,7 @@ class MaxAndSkipEnv(gym.Wrapper):
 
         max_frame = self._obs_buffer.max(axis=0)
 
-        return max_frame, total_reward, done, info
+        return max_frame, total_reward, done,False,  info
 
     def reset(self, **kwargs):
         return self.env.reset(**kwargs)
@@ -183,6 +171,7 @@ class WarpFrame(gym.ObservationWrapper):
                                             shape=(self.height, self.width, 1), dtype=np.uint8)
 
     def observation(self, frame):
+        #print(frame)
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
         frame = cv2.resize(frame, (self.width, self.height), interpolation=cv2.INTER_AREA)
         return frame[:, :, None]
@@ -203,18 +192,16 @@ class FrameStack(gym.Wrapper):
         self.observation_space = gym.spaces.Box(low=0, high=255, shape=(shp[0], shp[1], shp[2] * k), dtype=np.uint8)
 
     def reset(self):
-        ob = self.env.reset()
+        ob, info = self.env.reset()
         for _ in range(self.k):
             self.frames.append(ob)
-        return self._get_ob()
+        return self._get_ob(), info
 
     def step(self, action):
-        try:
-            ob, reward, done, info = self.env.step(action)
-        except ValueError:
-            ob, reward, done, _,  info = self.env.step(action)
+
+        ob, reward, done, _,  info = self.env.step(action)
         self.frames.append(ob)
-        return self._get_ob(), reward, done, info
+        return self._get_ob(), reward, done, False,  info
 
     def _get_ob(self):
         assert len(self.frames) == self.k
