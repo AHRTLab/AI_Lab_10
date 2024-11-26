@@ -1,6 +1,7 @@
 import numpy as np
 from collections import deque
-import gym
+import gymnasium as gym
+import ale_py
 import cv2
 
 cv2.ocl.setUseOpenCL(False) # disable GPU usage by OpenCV
@@ -128,9 +129,6 @@ class MaxAndSkipEnv(gym.Wrapper):
         self._obs_buffer = np.zeros((2,) + env.observation_space.shape, dtype=np.uint8)
         self._skip = skip
 
-    def reset(self):
-        return self.env.reset()
-
     def step(self, action):
         """Repeat action, sum reward, and max over last observations."""
         total_reward = 0.0
@@ -191,8 +189,8 @@ class FrameStack(gym.Wrapper):
         shp = env.observation_space.shape
         self.observation_space = gym.spaces.Box(low=0, high=255, shape=(shp[0], shp[1], shp[2] * k), dtype=np.uint8)
 
-    def reset(self):
-        ob, info = self.env.reset()
+    def reset(self, **kwargs):
+        ob, info = self.env.reset(**kwargs)
         for _ in range(self.k):
             self.frames.append(ob)
         return self._get_ob(), info

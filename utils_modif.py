@@ -77,7 +77,7 @@ def train_modif(env, current_model,target_model, optimizer, replay_buffer, devic
             if done:
                 episode_rewards.append(episode_reward)
                 break
-        if (episode+1) % 500 == 0:
+        if (episode+1) % 100 == 0:
             curr_path = os.path.join(MODEL_SAVE_PATH, f"{env.spec.id}_curr_episode_{episode+1}.pth")
             target_path = os.path.join(MODEL_SAVE_PATH, f"{env.spec.id}_target_episode_{episode+1}.pth")
             print(f"Saving weights at Episode {episode+1} ...")
